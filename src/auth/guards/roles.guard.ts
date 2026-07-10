@@ -1,20 +1,27 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { IS_PUBLIC_KEY, PERMISSION_KEY, type RequiredPermission } from '../decorators/roles.decorator';
+import {
+  IS_PUBLIC_KEY,
+  PERMISSION_KEY,
+  type RequiredPermission,
+} from '../decorators/roles.decorator';
 import { can } from '../permissions.matrix';
 import { actorOf, type AuthenticatedUser } from '../types';
 
 /**
  * Aplica la matriz de permisos (../permissions.matrix.ts) a cada endpoint.
  *
- * IMPORTANTE: hoy no existe ningún JwtStrategy que popule `request.user`
- * (ver Próximos Pasos #7 en requerimientos.md), así que todo actor se
- * resuelve como PUBLICO. Este guard falla cerrado a propósito: cualquier
- * endpoint marcado con @RequirePermission (es decir, cualquiera que no sea
- * explícitamente @Public()) rechaza la request mientras no haya JWT real.
- * Es el comportamiento correcto para RNF-02 — "protegido" por defecto es
- * más seguro que "abierto por accidente" mientras se construye el módulo
- * de auth.
+ * Corre después de OptionalJwtAuthGuard (ver auth.module.ts), que puebla
+ * `request.user` si vino un Bearer token válido de POST /auth/login. Si no
+ * vino token (o es inválido/expiró), `request.user` queda `undefined` y
+ * `actorOf()` lo resuelve como PUBLICO — sigue fallando cerrado por
+ * defecto (RNF-02): cualquier endpoint marcado con @RequirePermission
+ * rechaza la request salvo que el actor resuelto esté en la matriz.
  */
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -27,14 +34,15 @@ export class RolesGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
-    const required = this.reflector.getAllAndOverride<RequiredPermission | undefined>(
-      PERMISSION_KEY,
-      [context.getHandler(), context.getClass()],
-    );
+    const required = this.reflector.getAllAndOverride<
+      RequiredPermission | undefined
+    >(PERMISSION_KEY, [context.getHandler(), context.getClass()]);
     if (!required) {
       // Ningún endpoint de backoffice/cliente debería quedar sin marcar.
       // Fail closed: si falta la anotación, se rechaza en vez de exponerlo.
-      throw new ForbiddenException('Endpoint sin @RequirePermission ni @Public declarado.');
+      throw new ForbiddenException(
+        'Endpoint sin @RequirePermission ni @Public declarado.',
+      );
     }
 
     const request = context.switchToHttp().getRequest();

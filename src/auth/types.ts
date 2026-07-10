@@ -1,9 +1,11 @@
 import type { Actor, InternalRole } from './permissions.matrix';
 
 /**
- * Forma del `request.user` que un futuro JwtStrategy (Próximos Pasos #7 en
- * requerimientos.md) debe poblar. RolesGuard y los controllers dependen de
- * esta forma; no existe todavía ningún código que la produzca realmente.
+ * Forma de `request.user`, poblada por JwtStrategy (strategies/jwt.strategy.ts)
+ * a partir del payload firmado en AuthService.login(). RolesGuard y los
+ * controllers dependen de esta forma. Hoy solo se emite la variante
+ * `internal` (login de backoffice); `customer` queda para un futuro login
+ * de clientes (RF-19, inventario-tienda).
  */
 export type AuthenticatedUser =
   | { actorType: 'internal'; id: string; role: InternalRole }
