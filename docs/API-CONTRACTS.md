@@ -132,7 +132,7 @@ Cada transición valida el estado actual contra el esperado (`PREVIOUS_STATUS` e
 2. **Notificaciones** (RF-20, RF-23): no hay módulo de email ni de notificaciones internas. Los endpoints de cambio de estado de pedido no notifican a nadie todavía.
 3. **Base de datos persistente**: las pruebas de este documento corrieron contra un Postgres local efímero (`npx prisma dev`, ver abajo) — para producción hace falta Railway/Render/Fly.io (sección 5 de requerimientos.md) y correr `prisma migrate dev` (no solo `db push`) para tener historial de migraciones real.
 4. **Rate limiting / throttling** en rutas públicas de escritura (`POST /orders`, `POST /customers/register`) — no implementado, no estaba en el alcance de RF/RNF pero es una omisión típica antes de exponer a internet.
-5. **Sembrar el primer usuario ADMIN**: no hay ruta pública para crear el primer `User` (`POST /users` ya requiere ser ADMIN — dependencia circular a propósito, RNF-02). Hoy se crea a mano vía Prisma Client directo contra la base; un `seed.ts` o comando de CLI es un follow-up razonable.
+5. ~~**Sembrar el primer usuario ADMIN**.~~ ✅ `npm run seed` (`prisma db seed` → `prisma/seed.ts`, ver `prisma.config.ts`): crea un ADMIN con `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` (o defaults de dev) si todavía no existe ninguno; si ya hay uno, no hace nada (idempotente). Sigue siendo necesario porque `POST /users` requiere ser ADMIN a propósito (RNF-02) — dependencia circular intencional.
 
 ## Cómo se probó
 
