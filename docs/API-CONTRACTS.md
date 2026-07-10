@@ -6,7 +6,14 @@ Convenciones:
 - **Actor** = quién puede llamar la ruta, tomado literalmente de la matriz de permisos en `../../inventario-app/requerimientos.md` sección 9. `PUBLICO` = sin autenticación.
 - Todas las rutas de escritura validan el body con `class-validator` (RNF-03) vía `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })` global.
 - Los listados (`GET` de colección) aceptan `?page=&pageSize=` (RNF-06) y devuelven `{ data, meta: { page, pageSize, total, totalPages } }`.
-- **Hoy no existe JWT real** (Próximos Pasos #7 en requerimientos.md): `RolesGuard` resuelve todo actor como `PUBLICO` mientras tanto, así que cualquier ruta que no sea explícitamente `PUBLICO`-permitida devuelve 403. Esto es intencional (fail-closed, RNF-02), no un bug.
+- **JWT real** (Próximos Pasos #7, resuelto): `POST /auth/login` (ver sección `auth` abajo) devuelve un Bearer token para actores internos. `OptionalJwtAuthGuard` lo valida en cada request y puebla `request.user`; si no viene token (o es inválido/expiró), `request.user` queda `undefined` y `RolesGuard` sigue resolviendo ese actor como `PUBLICO` — el fail-closed de RNF-02 no cambió, solo dejó de ser el único camino posible.
+- El login de clientes (RF-19, usado por `inventario-tienda`) sigue sin implementar — `Customer.passwordHash` es nullable porque el checkout de invitado no lo necesita; es un follow-up separado del login de backoffice.
+
+## auth (`src/auth`)
+
+| Método y ruta | Actor | Body / Query | Notas |
+|---|---|---|---|
+| POST /auth/login | PUBLICO | `LoginDto` (email, password) | 401 si el email no existe, el usuario está inactivo, o la password no matchea. Devuelve `{ accessToken, user: { id, name, role } }`; `accessToken` es un JWT HS256 firmado con `JWT_SECRET`, payload `{ actorType: 'internal', id, role }`, expira en `JWT_EXPIRES_IN_SECONDS` (default 7 días) |
 
 ## users — RF-09 (`src/users`)
 
@@ -121,10 +128,11 @@ Cada transición valida el estado actual contra el esperado (`PREVIOUS_STATUS` e
 
 ## Qué falta para que esto sirva en producción
 
-1. **JWT real** (Próximos Pasos #7): hoy `RolesGuard` resuelve todo actor como `PUBLICO`. Falta `JwtStrategy` + `JwtAuthGuard` que pueble `request.user` con la forma de `AuthenticatedUser` (`src/auth/types.ts`) a partir del token.
+1. ~~**JWT real** (Próximos Pasos #7).~~ ✅ `JwtStrategy` + `OptionalJwtAuthGuard` (`src/auth/strategies`, `src/auth/guards`) pueblan `request.user` a partir de `POST /auth/login`. Pendiente aparte: login de clientes (RF-19, `inventario-tienda`).
 2. **Notificaciones** (RF-20, RF-23): no hay módulo de email ni de notificaciones internas. Los endpoints de cambio de estado de pedido no notifican a nadie todavía.
 3. **Base de datos persistente**: las pruebas de este documento corrieron contra un Postgres local efímero (`npx prisma dev`, ver abajo) — para producción hace falta Railway/Render/Fly.io (sección 5 de requerimientos.md) y correr `prisma migrate dev` (no solo `db push`) para tener historial de migraciones real.
 4. **Rate limiting / throttling** en rutas públicas de escritura (`POST /orders`, `POST /customers/register`) — no implementado, no estaba en el alcance de RF/RNF pero es una omisión típica antes de exponer a internet.
+5. **Sembrar el primer usuario ADMIN**: no hay ruta pública para crear el primer `User` (`POST /users` ya requiere ser ADMIN — dependencia circular a propósito, RNF-02). Hoy se crea a mano vía Prisma Client directo contra la base; un `seed.ts` o comando de CLI es un follow-up razonable.
 
 ## Cómo se probó
 
