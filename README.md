@@ -31,6 +31,37 @@ Ver `../inventario-app/requerimientos.md` para el detalle completo de requerimie
 
 Scaffold generado con [Nest](https://github.com/nestjs/nest) framework TypeScript starter.
 
+## API
+
+10 módulos de dominio (users, customers, categories, products, suppliers, inventory, purchase-orders, orders, reports, audit) implementados sobre NestJS + Prisma, con guards de rol aplicando la matriz de permisos de `../inventario-app/requerimientos.md` sección 9. Detalle de cada endpoint en [`docs/API-CONTRACTS.md`](./docs/API-CONTRACTS.md). Documentación interactiva (Swagger) en `GET /docs` con el servidor corriendo.
+
+**Todavía no hay JWT real** — `RolesGuard` (`src/auth/guards/roles.guard.ts`) resuelve todo actor como `PUBLICO` hasta que se implemente `JwtStrategy` (Próximos Pasos #7 en requerimientos.md), así que cualquier ruta no pública devuelve 403 por ahora. Es el comportamiento correcto mientras tanto (RNF-02: fail-closed, no fail-open).
+
+## Modelo de datos
+
+El schema de Prisma está en [`prisma/schema.prisma`](./prisma/schema.prisma) (validado, cliente generado — ver [`prisma/ER-DIAGRAM.md`](./prisma/ER-DIAGRAM.md) para el diagrama y las decisiones de diseño).
+
+**Nota Prisma 7** (rompe con versiones anteriores): `PrismaClient` ya no acepta una connection string en el schema — exige un *driver adapter* (`@prisma/adapter-pg`, ya instalado) pasado al constructor; `PrismaService` (`src/prisma/prisma.service.ts`) lo arma desde `process.env.DATABASE_URL`. `prisma.config.ts` solo lo usa el CLI, nunca el cliente en runtime. El generador también necesita `moduleFormat = "cjs"` en `schema.prisma` (ya configurado) — sin eso emite ESM (`import.meta.url`) que rompe al cargarse desde este proyecto CommonJS.
+
+Para desarrollo local sin una instancia propia de Postgres, `npx prisma dev` levanta una efímera (usada para probar todo lo de este repo hasta ahora):
+
+```bash
+npx prisma dev --detach          # imprime una connection string local
+# pegarla en .env como DATABASE_URL
+npx prisma db push               # aplica el schema sin generar migración versionada
+```
+
+Para una base de datos real (Railway/Render/Fly.io):
+
+```bash
+# 1. Configura tu conexión real en .env (DATABASE_URL)
+# 2. Crea y aplica la primera migración versionada
+npx prisma migrate dev --name init
+
+# Regenerar el cliente después de cualquier cambio al schema
+npx prisma generate
+```
+
 ## Project setup
 
 ```bash
