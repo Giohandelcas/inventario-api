@@ -7,13 +7,13 @@ Convenciones:
 - Todas las rutas de escritura validan el body con `class-validator` (RNF-03) vía `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })` global.
 - Los listados (`GET` de colección) aceptan `?page=&pageSize=` (RNF-06) y devuelven `{ data, meta: { page, pageSize, total, totalPages } }`.
 - **JWT real** (Próximos Pasos #7, resuelto): `POST /auth/login` (ver sección `auth` abajo) devuelve un Bearer token para actores internos. `OptionalJwtAuthGuard` lo valida en cada request y puebla `request.user`; si no viene token (o es inválido/expiró), `request.user` queda `undefined` y `RolesGuard` sigue resolviendo ese actor como `PUBLICO` — el fail-closed de RNF-02 no cambió, solo dejó de ser el único camino posible.
-- El login de clientes (RF-19, usado por `inventario-tienda`) sigue sin implementar — `Customer.passwordHash` es nullable porque el checkout de invitado no lo necesita; es un follow-up separado del login de backoffice.
+- El login de clientes (RF-19, usado por `inventario-tienda`) ya está implementado — ver `POST /customers/login` abajo. Un `Customer` creado solo por checkout de invitado (`passwordHash` null, ver ER-DIAGRAM.md) no puede loguearse hasta que registre contraseña vía `POST /customers/register`.
 
 ## auth (`src/auth`)
 
 | Método y ruta | Actor | Body / Query | Notas |
 |---|---|---|---|
-| POST /auth/login | PUBLICO | `LoginDto` (email, password) | 401 si el email no existe, el usuario está inactivo, o la password no matchea. Devuelve `{ accessToken, user: { id, name, role } }`; `accessToken` es un JWT HS256 firmado con `JWT_SECRET`, payload `{ actorType: 'internal', id, role }`, expira en `JWT_EXPIRES_IN_SECONDS` (default 7 días) |
+| POST /auth/login | PUBLICO | `LoginDto` (email, password) | Login de actores internos. 401 si el email no existe, el usuario está inactivo, o la password no matchea. Devuelve `{ accessToken, user: { id, name, role } }`; `accessToken` es un JWT HS256 firmado con `JWT_SECRET`, payload `{ actorType: 'internal', id, role }`, expira en `JWT_EXPIRES_IN_SECONDS` (default 7 días) |
 
 ## users — RF-09 (`src/users`)
 
@@ -30,6 +30,7 @@ Convenciones:
 | Método y ruta | Actor | Body / Query | Notas |
 |---|---|---|---|
 | POST /customers/register | PUBLICO | `RegisterCustomerDto` | si el email ya existe como guest (sin password), completa esa fila en vez de duplicar |
+| POST /customers/login | PUBLICO | `LoginDto` (email, password) | 401 si el email no existe, está inactivo, o no tiene `passwordHash` (guest sin cuenta registrada) o no matchea. Devuelve `{ accessToken, customer: { id, name, email } }`; payload del JWT `{ actorType: 'customer', id }` |
 | GET /customers/me | CLIENTE | — | 403 si no es actor `customer` |
 | PATCH /customers/me | CLIENTE | `UpdateCustomerDto` | solo su propio registro |
 | GET /customers | ADMIN, VENDEDOR | `PaginationQueryDto` | atención al cliente |
@@ -128,7 +129,7 @@ Cada transición valida el estado actual contra el esperado (`PREVIOUS_STATUS` e
 
 ## Qué falta para que esto sirva en producción
 
-1. ~~**JWT real** (Próximos Pasos #7).~~ ✅ `JwtStrategy` + `OptionalJwtAuthGuard` (`src/auth/strategies`, `src/auth/guards`) pueblan `request.user` a partir de `POST /auth/login`. Pendiente aparte: login de clientes (RF-19, `inventario-tienda`).
+1. ~~**JWT real** (Próximos Pasos #7), incluido login de clientes (RF-19).~~ ✅ `JwtStrategy` + `OptionalJwtAuthGuard` (`src/auth/strategies`, `src/auth/guards`) pueblan `request.user` a partir de `POST /auth/login` (internos) y `POST /customers/login` (clientes) — mismo mecanismo, payload `{ actorType: 'internal'|'customer', ... }`.
 2. **Notificaciones** (RF-20, RF-23): no hay módulo de email ni de notificaciones internas. Los endpoints de cambio de estado de pedido no notifican a nadie todavía.
 3. **Base de datos persistente**: las pruebas de este documento corrieron contra un Postgres local efímero (`npx prisma dev`, ver abajo) — para producción hace falta Railway/Render/Fly.io (sección 5 de requerimientos.md) y correr `prisma migrate dev` (no solo `db push`) para tener historial de migraciones real.
 4. **Rate limiting / throttling** en rutas públicas de escritura (`POST /orders`, `POST /customers/register`) — no implementado, no estaba en el alcance de RF/RNF pero es una omisión típica antes de exponer a internet.
