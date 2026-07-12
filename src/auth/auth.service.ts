@@ -10,11 +10,19 @@ export interface InternalJwtPayload {
   role: InternalRole;
 }
 
+export interface CustomerJwtPayload {
+  actorType: 'customer';
+  id: string;
+}
+
+export type AuthJwtPayload = InternalJwtPayload | CustomerJwtPayload;
+
 /**
- * Login de usuarios internos (Admin/Vendedor/Bodega) para el backoffice
- * (`inventario-app`). El login de clientes (RF-19, storefront) es un
- * follow-up separado: `Customer.passwordHash` es nullable porque el
- * checkout de invitado no lo necesita (ver ER-DIAGRAM.md).
+ * Login de usuarios internos (Admin/Vendedor/Bodega, para `inventario-app`)
+ * y de clientes (RF-19, para `inventario-tienda`). Un cliente creado solo
+ * por checkout de invitado (`Customer.passwordHash` null, ver
+ * ER-DIAGRAM.md) no puede loguearse hasta que registre una contraseña vía
+ * POST /customers/register.
  */
 @Injectable()
 export class AuthService {
@@ -43,6 +51,33 @@ export class AuthService {
     return {
       accessToken: await this.jwtService.signAsync(payload),
       user: { id: user.id, name: user.name, role: user.role },
+    };
+  }
+
+  async loginCustomer(email: string, password: string) {
+    const customer = await this.prisma.customer.findUnique({
+      where: { email },
+    });
+    if (!customer || !customer.active || !customer.passwordHash) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    const passwordMatches = await bcrypt.compare(
+      password,
+      customer.passwordHash,
+    );
+    if (!passwordMatches) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    const payload: CustomerJwtPayload = {
+      actorType: 'customer',
+      id: customer.id,
+    };
+
+    return {
+      accessToken: await this.jwtService.signAsync(payload),
+      customer: { id: customer.id, name: customer.name, email: customer.email },
     };
   }
 }
