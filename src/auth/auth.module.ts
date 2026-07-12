@@ -31,7 +31,10 @@ import { JwtStrategy } from './strategies/jwt.strategy';
         // milisegundos en vez de segundos.
         signOptions: {
           expiresIn: Number(
-            config.get<string>('JWT_EXPIRES_IN_SECONDS', String(7 * 24 * 60 * 60)),
+            config.get<string>(
+              'JWT_EXPIRES_IN_SECONDS',
+              String(7 * 24 * 60 * 60),
+            ),
           ),
         },
       }),
@@ -44,5 +47,6 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     { provide: APP_GUARD, useClass: OptionalJwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
+  exports: [AuthService],
 })
 export class AuthModule {}

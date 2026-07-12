@@ -1,7 +1,18 @@
-import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { AuthService } from '../auth/auth.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public, RequirePermission } from '../auth/decorators/roles.decorator';
+import { LoginDto } from '../auth/dto/login.dto';
 import type { AuthenticatedUser } from '../auth/types';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CustomersService } from './customers.service';
@@ -12,12 +23,22 @@ import { UpdateCustomerDto } from './dto/update-customer.dto';
 @ApiTags('customers')
 @Controller('customers')
 export class CustomersController {
-  constructor(private readonly customersService: CustomersService) {}
+  constructor(
+    private readonly customersService: CustomersService,
+    private readonly authService: AuthService,
+  ) {}
 
   @Post('register')
   @Public()
   register(@Body() dto: RegisterCustomerDto) {
     return this.customersService.register(dto);
+  }
+
+  /** Un Customer creado solo por checkout de invitado (sin passwordHash) no puede loguearse todavía. */
+  @Post('login')
+  @Public()
+  login(@Body() dto: LoginDto) {
+    return this.authService.loginCustomer(dto.email, dto.password);
   }
 
   @Get('me')
@@ -31,7 +52,10 @@ export class CustomersController {
 
   @Patch('me')
   @RequirePermission('customer', 'update')
-  updateMe(@CurrentUser() user: AuthenticatedUser | undefined, @Body() dto: UpdateCustomerDto) {
+  updateMe(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Body() dto: UpdateCustomerDto,
+  ) {
     if (user?.actorType !== 'customer') {
       throw new ForbiddenException('Ruta exclusiva de clientes autenticados');
     }
